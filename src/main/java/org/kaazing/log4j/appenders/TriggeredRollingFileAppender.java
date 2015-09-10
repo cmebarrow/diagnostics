@@ -119,8 +119,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
                 messageCount.set(0);
                 executorService.submit(new Runnable() {
                     public void run() {
-                        debug(getDateTime()
-                                + "TriggeredRollingFileAppender instance execute printAllMessages Asynchronously");
+                        debug("TriggeredRollingFileAppender instance execute printAllMessages Asynchronously");
                         printAllMessages(eventsListOut);
                     }
                 });
@@ -136,7 +135,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         }
     }
 
-    private String getDateTime() {
+    private static String getDateTime() {
         final DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
         final Date date = new Date();
         return dateFormat.format(date);
@@ -166,7 +165,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
     }
 
     private void appendAll(Queue<LoggingEvent> EL) {
-        debug(getDateTime() + "TriggeredRollingFileAppender instance copy eventList to local");
+        debug( "TriggeredRollingFileAppender instance copy eventList to local");
 
         Queue<LoggingEvent> eventsListOut = new LinkedBlockingQueue<LoggingEvent>(EL);
         printNow = true;
@@ -185,7 +184,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
 
     private static void debug(String message) {
         if (DEBUG) {
-            System.out.println(message);
+            System.out.println(getDateTime() + " " + message);
         }
     }
 
