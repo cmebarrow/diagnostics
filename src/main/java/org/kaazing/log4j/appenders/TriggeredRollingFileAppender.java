@@ -25,8 +25,9 @@ import org.apache.log4j.spi.LoggingEvent;
  * messages is reset by calling the static initialize method. This class automatically sets the level of the root logger
  * to Level.TRACE, the first time a messages is logged using it. USAGE: configure this class as the ONLY appender on the
  * root Logger (on the <root> element log4j-config.xml) in order to store trace level log messages in memory during a
- * test run without seriously impacting performance or thread concurrency. If a test fails, the printAllMessages method
- * can be called to write all the messages to standard output.
+ * test run without seriously impacting performance or thread concurrency. If a message is logged using this appender
+ * that matches one of the configured patterns, then all in memory messages are written out to the configured output
+ * file.
  */
 public class TriggeredRollingFileAppender extends RollingFileAppender {
     private static final boolean DEBUG = true;
@@ -40,13 +41,11 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
     private int maximumMessages = 1000;
     private int truncateAfter = 200;
     private static AtomicInteger messageCount = new AtomicInteger(0);
-    private static String gatewayBeingStarted;
 
     private boolean printNow;
-    private String gatewayName;
     private String triggerPattern = "exception";
-    private static ExecutorService executorService = Executors.newSingleThreadExecutor(); // create a thread for
-                                                                                          // printAllMessages
+    // create a thread for printAllMessages
+    private static ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     static {
         initialize();
@@ -56,7 +55,6 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         eventsList.get().clear();
         lastInstance = null;
         messageCount.set(0);
-        gatewayBeingStarted = null;
     }
 
     public int getmaximumMessages() {
@@ -83,50 +81,35 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         triggerPattern = pattern;
     }
 
-    public static void printAllMessages(Queue<LoggingEvent> EL) {
+    public static void printAllMessages(Queue<LoggingEvent> events) {
         if (lastInstance == null) {
             System.out.println("Unable to print out trace level root logger messages - please "
                     + "configure TriggeredRollingFileAppender on the <root> logger in log4j-config.xml");
         } else {
 
-            // System.out.println(String.format("Printing last %d of %d log messages", eventsList.size(),
-            // messageCount.get()));
-            lastInstance.appendAll(EL);
+            debug(String.format("Printing last %d of %d log messages", events.size(), messageCount.get()));
+            lastInstance.appendAll(events);
         }
-    }
-
-    /**
-     * Call this to identify each gateway when starting multiple embedded gateways. That way, each log message will be
-     * prefixed by the name of the gateway that issued the message (though unfortunately this can only be done during
-     * gateway startup, see injectGatewayName).
-     */
-    public static void setGatewayBeingStarted(String gatewayName) {
-        gatewayBeingStarted = gatewayName;
     }
 
     public TriggeredRollingFileAppender() {
         super();
         lastInstance = this;
-        gatewayName = gatewayBeingStarted;
         debug("TriggeredRollingFileAppender instance " + this.toString() + " created");
     }
 
     @Override
     protected void subAppend(LoggingEvent event) {
         boolean match = false;
-        final String oldMessage = (String) event.getMessage();
+        final String message = (String) event.getMessage();
 
         if (printNow) {
             super.subAppend(event);
         } else {
             // set name of current thread on the event so it's correct when/if we print the message later
             event.getThreadName();
-            // for triggeredRollingFileAppender gatewayName is supposed to be null
-            if (gatewayName != null) {
-                injectGatewayName(event);
-            }
-            match = oldMessage.toString().matches(triggerPattern);
-            if (oldMessage != null && oldMessage.length() > truncateAfter) {
+            match = message.toString().matches(triggerPattern);
+            if (message != null && message.length() > truncateAfter) {
                 truncateMessage(event);
             }
             eventsList.get().add(event);
@@ -147,7 +130,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
                 try {
                     eventsList.get().poll(10, TimeUnit.MILLISECONDS);
                 } catch (final InterruptedException e) {
-                    // do nothing
+                    // no action
                 }
             }
         }
@@ -182,13 +165,6 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         return true;
     }
 
-    @Override
-    public String toString() {
-        String ret = super.toString();
-        ret = ret + (gatewayName == null ? "" : " for gateway " + gatewayName);
-        return ret;
-    }
-
     private void appendAll(Queue<LoggingEvent> EL) {
         debug(getDateTime() + "TriggeredRollingFileAppender instance copy eventList to local");
 
@@ -207,44 +183,10 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         printNow = false;
     }
 
-    private void debug(String message) {
+    private static void debug(String message) {
         if (DEBUG) {
             System.out.println(message);
         }
     }
 
-    private void injectGatewayName(LoggingEvent event) {
-        if (!injectGatewayName(event, "renderedMessage")) {
-            injectGatewayName(event, "message");
-        }
-    }
-
-    private boolean injectGatewayName(LoggingEvent event, String fieldName) {
-        Field field;
-        try {
-            field = LoggingEvent.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            final String oldMessage = (String) field.get(event);
-
-            if (oldMessage != null) {
-                // String newMessage = String.format("[%s gateway] %s", gatewayName, oldMessage);
-                final String newMessage = String.format("[%s gateway] %s", gatewayName, oldMessage);
-                field.set(event, newMessage);
-                if (oldMessage.contains("Started server successfully in ")) {
-                    // Unfortunately when multiple gateways are being used, each time one is started, all appender
-                    // instances
-                    // are closed and recreated. So we can only rely on gatewayName being correct during gateway
-                    // startup.
-                    // So we must unset it once the gateway is started.
-                    gatewayName = null;
-                }
-                return true;
-            } else {
-                return false;
-            }
-        } catch (final Exception e) {
-            System.out.println(this + ": caught exception " + e);
-            return true;
-        }
-    }
 }
