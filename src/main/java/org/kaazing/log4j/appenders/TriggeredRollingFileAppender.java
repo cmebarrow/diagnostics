@@ -42,7 +42,6 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
     private int truncateAfter = 200;
     private static AtomicInteger messageCount = new AtomicInteger(0);
 
-    private boolean printNow;
     private String triggerPattern = "exception";
     // create a thread for printAllMessages
     private static ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -87,7 +86,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
                     + "configure TriggeredRollingFileAppender on the <root> logger in log4j-config.xml");
         } else {
 
-            debug(String.format("Printing last %d of %d log messages", events.size(), messageCount.get()));
+            debug(String.format("printing last %d log messages", events.size()));
             lastInstance.appendAll(events);
         }
     }
@@ -95,7 +94,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
     public TriggeredRollingFileAppender() {
         super();
         lastInstance = this;
-        debug("TriggeredRollingFileAppender instance " + this.toString() + " created");
+        debug("instance " + this.toString() + " created");
     }
 
     @Override
@@ -103,34 +102,30 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         boolean match = false;
         final String message = (String) event.getMessage();
 
-        if (printNow) {
-            super.subAppend(event);
-        } else {
-            // set name of current thread on the event so it's correct when/if we print the message later
-            event.getThreadName();
-            match = message.toString().matches(triggerPattern);
-            if (message != null && message.length() > truncateAfter) {
-                truncateMessage(event);
-            }
-            eventsList.get().add(event);
-            // To avoid OOM, limit number of cached messages
-            if (match) {
-                messageCount.set(0);
-                final Queue<LoggingEvent> eventsListOut = eventsList.getAndSet(new LinkedBlockingQueue<LoggingEvent>());
-                executorService.submit(new Runnable() {
-                    public void run() {
-                        debug("TriggeredRollingFileAppender instance execute printAllMessages Asynchronously");
-                        printAllMessages(eventsListOut);
-                    }
-                });
-
-            } else if (messageCount.incrementAndGet() > maximumMessages) {
-                // remove oldest message
-                try {
-                    eventsList.get().poll(10, TimeUnit.MILLISECONDS);
-                } catch (final InterruptedException e) {
-                    // no action
+        // set name of current thread on the event so it's correct when/if we print the message later
+        event.getThreadName();
+        match = message.toString().matches(triggerPattern);
+        if (message != null && message.length() > truncateAfter) {
+            truncateMessage(event);
+        }
+        eventsList.get().add(event);
+        // To avoid OOM, limit number of cached messages
+        if (match) {
+            messageCount.set(0);
+            final Queue<LoggingEvent> eventsListOut = eventsList.getAndSet(new LinkedBlockingQueue<LoggingEvent>());
+            executorService.submit(new Runnable() {
+                public void run() {
+                    debug(String.format("instance %s executing printAllMessages asynchronously", this.toString()));
+                    printAllMessages(eventsListOut);
                 }
+            });
+
+        } else if (messageCount.incrementAndGet() > maximumMessages) {
+            // remove oldest message
+            try {
+                eventsList.get().poll(10, TimeUnit.MILLISECONDS);
+            } catch (final InterruptedException e) {
+                // no action
             }
         }
     }
@@ -156,7 +151,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
 
     @Override
     public void close() {
-        debug("TriggeredRollingFileAppender instance " + this + " closed");
+        debug("instance " + this + " closed");
     }
 
     @Override
@@ -164,27 +159,21 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
         return true;
     }
 
-    private void appendAll(Queue<LoggingEvent> EL) {
-        debug("TriggeredRollingFileAppender instance copy eventList to local");
-
-        Queue<LoggingEvent> eventsListOut = new LinkedBlockingQueue<LoggingEvent>(EL);
-        printNow = true;
-
+    private void appendAll(Queue<LoggingEvent> events) {
         try {
-            for (final LoggingEvent event : eventsListOut) {
-                super.append(event);
+            for (final LoggingEvent event : events) {
+                super.subAppend(event);
             }
         } finally {
             // Make sure we always free up memory
-            eventsListOut.clear();
-            eventsListOut = null; // remove reference, so it will be GC'ed
+            events.clear();
+            events = null; // remove reference, so it will be GC'ed
         }
-        printNow = false;
     }
 
     private static void debug(String message) {
         if (DEBUG) {
-            System.out.println(getDateTime() + " " + message);
+            System.out.println(getDateTime() + " TriggeredRollingFileAppender: " + message);
         }
     }
 
