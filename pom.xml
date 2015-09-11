@@ -15,7 +15,7 @@
     <artifactId>log4j.util</artifactId>
     <name>Log4j Utils</name>
     <description>Miscellaneous support utilities for logging</description>
-    <version>develop-SNAPSHOT</version>
+    <version>1.0.0.1-alpha</version>
 
     <url>https://github.com/kaazing/log4j.util.git</url>
     <scm>
