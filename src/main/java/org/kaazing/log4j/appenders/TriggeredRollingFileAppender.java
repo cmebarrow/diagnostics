@@ -115,8 +115,8 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
             eventsList.get().add(event);
             // To avoid OOM, limit number of cached messages
             if (match) {
-                final Queue<LoggingEvent> eventsListOut = eventsList.getAndSet(new LinkedBlockingQueue<LoggingEvent>());
                 messageCount.set(0);
+                final Queue<LoggingEvent> eventsListOut = eventsList.getAndSet(new LinkedBlockingQueue<LoggingEvent>());
                 executorService.submit(new Runnable() {
                     public void run() {
                         debug("TriggeredRollingFileAppender instance execute printAllMessages Asynchronously");
@@ -165,7 +165,7 @@ public class TriggeredRollingFileAppender extends RollingFileAppender {
     }
 
     private void appendAll(Queue<LoggingEvent> EL) {
-        debug( "TriggeredRollingFileAppender instance copy eventList to local");
+        debug("TriggeredRollingFileAppender instance copy eventList to local");
 
         Queue<LoggingEvent> eventsListOut = new LinkedBlockingQueue<LoggingEvent>(EL);
         printNow = true;
